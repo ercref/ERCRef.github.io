@@ -1,4 +1,4 @@
-"""Build the graph JSON for the homepage and inline it into template.html.
+"""Build the graph JSON and inline it into template.html to write graph.html.
 
 Usage: python3 export_graph.py <dir with EIPs/ and ERCs/ clones> <work dir> <avatar dir> <output html> <snapshot date>
 """
