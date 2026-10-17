@@ -1,14 +1,15 @@
-# Citation graph (homepage source)
+# Citation graph (graph.html source)
 
-The ercref.org homepage (`/index.html`) is a force-directed graph of every
-Final EIP and ERC and their authors. This folder holds the source that builds it.
+`/graph.html` is a force-directed graph of every Final EIP and ERC and their
+authors. The homepage embeds it in its "Graph" section. This folder holds the
+source that builds it.
 
 ```
 tools/citation-graph/
 ├── template.html     page markup, styles and graph code; __DATA__ and __DATE__ are placeholders
 ├── pagerank.py       parses EIP/ERC front matter, builds the citation graph, runs PageRank
-├── export_graph.py   turns the result into graph JSON and writes /index.html
-└── build.sh          one command: fetch repos and avatars, then write /index.html
+├── export_graph.py   turns the result into graph JSON and writes /graph.html
+└── build.sh          one command: fetch repos and avatars, then write /graph.html
 ```
 
 ## How the scores work
