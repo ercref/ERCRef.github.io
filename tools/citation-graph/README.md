@@ -21,6 +21,12 @@ tools/citation-graph/
   With n authors, the first author gets n parts and the last author gets 1 part.
 - An author's score is the sum of their shares over all Final documents.
 
+## Colors
+
+`graph.html` follows the system light or dark setting. Add `?theme=light` or
+`?theme=dark` to pin it. The homepage embeds `graph.html?theme=light` to match
+its light background.
+
 ## Rebuild the page
 
 ```sh

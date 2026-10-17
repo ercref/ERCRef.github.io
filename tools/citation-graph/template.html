@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+// ?theme=light or ?theme=dark pins the colors (the homepage embed uses light); otherwise follow the system setting
+try { const th = new URLSearchParams(location.search).get('theme'); if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th; } catch (e) {}
+</script>
 <meta name="description" content="Force-directed citation graph of Final EIPs and ERCs and their authors, by ERCRef.">
 <link href="images/favicon.png" rel="shortcut icon" type="image/x-icon">
 <title>EIP·ERC Citation Graph · ERCRef</title>
@@ -33,62 +37,14 @@ body{background:var(--bg);color:var(--fg);font-family:var(--sans);overflow:hidde
 #stage{position:fixed;inset:0;touch-action:none}
 canvas{display:block;width:100%;height:100%;cursor:grab}
 canvas.over{cursor:pointer}
-.card{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:10px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:12px 14px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.12)}
-#ctl{top:calc(12px + env(safe-area-inset-top,0px));left:16px;width:min(280px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px}
-#ctl h1{margin:0;font-size:15px;font-weight:600;text-wrap:balance}
-#ctl .sub{color:var(--muted);font-size:12px;line-height:1.45}
-#ctl .sub a{color:var(--hi)}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-input[type=search]{flex:1;min-width:0;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--fg)}
-button{font:inherit;font-size:12px;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--fg);cursor:pointer}
-button:hover{border-color:var(--hi)}
-button[aria-pressed=true]{background:var(--hi);border-color:var(--hi);color:#fff}
 :focus-visible{outline:2px solid var(--hi);outline-offset:2px}
-label{color:var(--muted);font-size:12px;display:flex;gap:6px;align-items:center}
-.legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:12px}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px;margin-right:4px}
-#mode{font-size:12px;color:var(--muted)}
-#mode b{color:var(--fg);font-family:var(--mono);font-weight:600}
-#info{top:calc(12px + env(safe-area-inset-top,0px));right:16px;width:min(320px,calc(100vw - 32px));max-height:calc(100% - 24px);overflow:auto}
-#info h2{margin:0 0 4px;font-size:15px;font-weight:600;text-wrap:balance}
-#info .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px;margin:8px 0}
-#info .kv dt{color:var(--muted)} #info .kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums}
-#info ol{margin:6px 0 0;padding-left:18px;font-size:12px;line-height:1.6}
-#info li button{border:none;padding:0;color:var(--hi);text-decoration:underline;text-underline-offset:2px}
-#info .num{font-family:var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
-#info a{color:var(--hi)}
-.hint{color:var(--muted);font-size:12px}
-@media (max-width:640px){
-  #info{top:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px));max-height:42%}
-  #ctl .sub{display:none}
-}
 </style>
 
 </head>
 <body>
 <div id="stage"><canvas id="cv" aria-label="Force-directed graph of Final EIPs, ERCs and their authors"></canvas></div>
 
-<section id="ctl" class="card">
-  <h1>EIP·ERC Citation Graph</h1>
-  <div class="sub">Final EIPs and ERCs with their authors. Node size follows citation PageRank. Each document's score is shared among its authors by author order (n, n−1, …, 1) and summed per author. Hover to see nearby scores. Click a node to open its local graph. <a href="index.html" target="_top">ERCRef home</a> · data snapshot __DATE__.</div>
-  <form class="row" id="sf">
-    <input type="search" id="q" placeholder="Number or author, e.g. 4337, vbuterin" autocomplete="off">
-    <button type="submit">Find</button>
-  </form>
-  <div class="row">
-    <button id="bGlobal" aria-pressed="true">Global</button>
-    <label for="depth">Depth <input id="depth" type="range" min="1" max="3" value="1" style="width:70px"> <span id="dv">1</span></label>
-    <label for="auth"><input id="auth" type="checkbox" checked> Authors</label>
-  </div>
-  <div id="mode">Global view</div>
-  <div class="legend">
-    <span><i class="dot" style="background:var(--eip)"></i>EIP</span>
-    <span><i class="dot" style="background:var(--erc)"></i>ERC</span>
-    <span><i class="dot" style="background:var(--author)"></i>Author</span>
-  </div>
-</section>
 
-<aside id="info" class="card" hidden></aside>
 
 <script id="data" type="application/json">__DATA__</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
@@ -120,7 +76,8 @@ function resize() {
   dpr = window.devicePixelRatio || 1; W = cv.clientWidth; H = cv.clientHeight;
   cv.width = W * dpr; cv.height = H * dpr;
 }
-new ResizeObserver(resize).observe(cv); resize();
+
+new ResizeObserver(() => { const small = W < 50; resize(); if (small && W >= 50 && typeof zoom !== 'undefined') fit(0); }).observe(cv); resize();
 
 let C = {};
 function readTheme() {
@@ -179,7 +136,9 @@ function fit(dur = 600) {
   if (!vis.length) return;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const n of vis) { x0 = Math.min(x0, n.x - n.R); y0 = Math.min(y0, n.y - n.R); x1 = Math.max(x1, n.x + n.R); y1 = Math.max(y1, n.y + n.R); }
-  const pad = 40, k = Math.min(4, 0.95 * Math.min((W - pad * 2) / (x1 - x0 || 1), (H - pad * 2) / (y1 - y0 || 1)));
+  W = cv.clientWidth; H = cv.clientHeight;
+  if (W < 50 || H < 50 || !isFinite(x1 - x0)) return;
+  const pad = Math.min(40, W / 8), k = Math.max(0.08, Math.min(4, 0.95 * Math.min((W - pad * 2) / (x1 - x0 || 1), (H - pad * 2) / (y1 - y0 || 1))));
   const t = d3.zoomIdentity.translate(W / 2, H / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
   d3.select(cv).transition().duration(reduce ? 0 : dur).call(zoom.transform, t);
 }
@@ -202,7 +161,7 @@ const drag = d3.drag().container(cv)
   .on('end', e => {
     if (!e.active) sim.alphaTarget(0);
     if (!(mode === 'local' && e.subject === center)) { e.subject.fx = null; e.subject.fy = null; }
-    if (!dragMoved) focus(e.subject);
+    if (!dragMoved) openPage(e.subject);
   });
 d3.select(cv).call(drag).call(zoom).on('dblclick.zoom', null);
 
@@ -282,63 +241,15 @@ function frame() {
   requestAnimationFrame(frame);
 }
 
-// detail card
-const info = document.getElementById('info');
-function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
-function showInfo(n) {
-  const nb = [...adj.get(n.id)].map(id => byId.get(id));
-  let html;
-  if (n.t === 'A') {
-    const ds = nb.filter(m => m.t !== 'A').map(m => ({ m, w: linkInfo.get(n.id + '|' + m.id).w })).sort((a, b) => b.w - a.w);
-    html = `<h2>${esc(n.name)}</h2>
-      ${n.h ? `<a href="https://github.com/${esc(n.h)}" target="_blank" rel="noopener">@${esc(n.h)}</a>` : '<span class="hint">No GitHub account</span>'}
-      <dl class="kv"><dt>Author score</dt><dd>${n.s.toFixed(2)}</dd><dt>Author rank</dt><dd>${n.rank} / ${auths.length}</dd><dt>Final documents</dt><dd>${ds.length}</dd></dl>
-      <div class="hint">Score from each document</div>
-      <ol>${ds.map(({ m, w }) => `<li><button data-id="${m.id}">${m.t}-${m.n}</button> ${esc(m.title)} <span class="num">${w.toFixed(2)}</span></li>`).join('')}</ol>`;
-  } else {
-    const as = nb.filter(m => m.t === 'A').map(m => ({ m, w: linkInfo.get(n.id + '|' + m.id).w })).sort((a, b) => b.w - a.w);
-    const refs = nb.filter(m => m.t !== 'A').sort((a, b) => b.s - a.s);
-    const base = n.t === 'EIP' ? 'https://eips.ethereum.org/EIPS/eip-' : 'https://ercs.ethereum.org/ERCS/erc-';
-    html = `<h2>${n.t}-${n.n} ${esc(n.title)}</h2>
-      <a href="${base}${n.n}" target="_blank" rel="noopener">Read the document</a>
-      <dl class="kv"><dt>PageRank</dt><dd>${n.s.toFixed(2)}</dd><dt>Document rank</dt><dd>${n.rank} / ${docs.length}</dd><dt>Linked Final documents</dt><dd>${refs.length}</dd></dl>
-      <div class="hint">Authors (share by author order)</div>
-      <ol>${as.map(({ m, w }) => `<li><button data-id="${m.id}">${esc(m.h || m.name)}</button> <span class="num">${w.toFixed(2)}</span></li>`).join('')}</ol>`;
-  }
-  info.innerHTML = html; info.hidden = false;
+// clicking a node opens its EIP/ERC page or the author's GitHub profile in a new tab
+function pageUrl(n) {
+  if (n.t === 'A') return n.h ? 'https://github.com/' + n.h : null;
+  return (n.t === 'EIP' ? 'https://eips.ethereum.org/EIPS/eip-' : 'https://ercs.ethereum.org/ERCS/erc-') + n.n;
 }
-info.addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (b) focus(byId.get(b.dataset.id)); });
-
-const modeEl = document.getElementById('mode'), bG = document.getElementById('bGlobal');
-function focus(n) {
-  if (!n) return;
-  mode = 'local'; if (center) { center.fx = null; center.fy = null; }
-  center = n; vis.forEach(m => m._seen = true);
-  build(); showInfo(n);
-  modeEl.innerHTML = `Local graph: <b>${n.t === 'A' ? esc(n.h || n.name) : n.t + '-' + n.n}</b>, depth ${depth}, ${vis.length} nodes`;
-  bG.setAttribute('aria-pressed', 'false');
-  setTimeout(() => fit(), reduce ? 0 : 500);
-}
-function global() {
-  mode = 'global'; if (center) { center.fx = null; center.fy = null; } center = null;
-  build(0.5); info.hidden = true; modeEl.textContent = `Global view, ${vis.length} nodes`;
-  bG.setAttribute('aria-pressed', 'true'); setTimeout(() => fit(), reduce ? 0 : 400);
-}
-bG.onclick = global;
-const dEl = document.getElementById('depth');
-dEl.oninput = () => { depth = +dEl.value; document.getElementById('dv').textContent = depth; if (mode === 'local') focus(center); };
-document.getElementById('auth').onchange = e => { showAuthors = e.target.checked; mode === 'local' ? focus(center) : global(); };
-document.getElementById('sf').onsubmit = e => {
-  e.preventDefault(); const q = document.getElementById('q').value.trim().toLowerCase().replace(/^(erc|eip)[- ]?/, '');
-  if (!q) return;
-  const hit = N.find(n => n.t !== 'A' && String(n.n) === q) || N.find(n => n.t === 'A' && (n.h === q || (n.name || '').toLowerCase() === q))
-    || N.find(n => n.t === 'A' && ((n.h || '').includes(q) || (n.name || '').toLowerCase().includes(q))) || N.find(n => n.t !== 'A' && n.title.toLowerCase().includes(q));
-  if (hit) focus(hit); else modeEl.textContent = `No match for "${q}". The graph shows Final documents only. Try a number or a GitHub handle.`;
-};
+function openPage(n) { const u = pageUrl(n); if (u) window.open(u, '_blank', 'noopener'); }
 
 // boot: settle the global layout first so the first frame is already readable
 build(1); sim.stop(); for (let i = 0; i < 260; i++) sim.tick();
-modeEl.textContent = `Global view, ${vis.length} nodes`;
 const boot = () => { fit(0); sim.alpha(0.05).restart(); requestAnimationFrame(frame); };
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(boot);
 })();
