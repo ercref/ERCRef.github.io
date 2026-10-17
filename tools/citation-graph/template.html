@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Force-directed citation graph of Final EIPs and ERCs and their authors, by ERCRef.">
+<link href="images/favicon.png" rel="shortcut icon" type="image/x-icon">
+<title>EIP·ERC Citation Graph · ERCRef</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-size:14px}
+
+/* Layout: full-bleed canvas like Obsidian's graph pane; floating control card top-left, detail card top-right (bottom sheet on phones). */
+:root{
+  --bg:#f4f5f7; --panel:rgba(255,255,255,.92); --fg:#1d2330; --muted:#677084; --line:#d5d9e2;
+  --eip:#3d6fd9; --erc:#c2410c; --author:#7c8597; --link:#9aa3b5; --alink:#b9a6e6; --hi:#6d4bd8;
+  --label:#1d2330;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --sans:"IBM Plex Sans",-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#16181d; --panel:rgba(30,33,40,.92); --fg:#e3e6ee; --muted:#98a0b2; --line:#343944;
+  --eip:#6f97ef; --erc:#f08a4b; --author:#8b93a5; --link:#4a5060; --alink:#5d4f86; --hi:#a78bfa;
+  --label:#e3e6ee; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#16181d; --panel:rgba(30,33,40,.92); --fg:#e3e6ee; --muted:#98a0b2; --line:#343944;
+  --eip:#6f97ef; --erc:#f08a4b; --author:#8b93a5; --link:#4a5060; --alink:#5d4f86; --hi:#a78bfa;
+  --label:#e3e6ee; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);overflow:hidden}
+#stage{position:fixed;inset:0;touch-action:none}
+canvas{display:block;width:100%;height:100%;cursor:grab}
+canvas.over{cursor:pointer}
+.card{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:10px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:12px 14px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.12)}
+#ctl{top:calc(12px + env(safe-area-inset-top,0px));left:16px;width:min(280px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px}
+#ctl h1{margin:0;font-size:15px;font-weight:600;text-wrap:balance}
+#ctl .sub{color:var(--muted);font-size:12px;line-height:1.45}
+#ctl .sub a{color:var(--hi)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input[type=search]{flex:1;min-width:0;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--fg)}
+button{font:inherit;font-size:12px;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--fg);cursor:pointer}
+button:hover{border-color:var(--hi)}
+button[aria-pressed=true]{background:var(--hi);border-color:var(--hi);color:#fff}
+:focus-visible{outline:2px solid var(--hi);outline-offset:2px}
+label{color:var(--muted);font-size:12px;display:flex;gap:6px;align-items:center}
+.legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px;margin-right:4px}
+#mode{font-size:12px;color:var(--muted)}
+#mode b{color:var(--fg);font-family:var(--mono);font-weight:600}
+#info{top:calc(12px + env(safe-area-inset-top,0px));right:16px;width:min(320px,calc(100vw - 32px));max-height:calc(100% - 24px);overflow:auto}
+#info h2{margin:0 0 4px;font-size:15px;font-weight:600;text-wrap:balance}
+#info .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px;margin:8px 0}
+#info .kv dt{color:var(--muted)} #info .kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums}
+#info ol{margin:6px 0 0;padding-left:18px;font-size:12px;line-height:1.6}
+#info li button{border:none;padding:0;color:var(--hi);text-decoration:underline;text-underline-offset:2px}
+#info .num{font-family:var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+#info a{color:var(--hi)}
+.hint{color:var(--muted);font-size:12px}
+@media (max-width:640px){
+  #info{top:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px));max-height:42%}
+  #ctl .sub{display:none}
+}
+</style>
+
+</head>
+<body>
+<div id="stage"><canvas id="cv" aria-label="Force-directed graph of Final EIPs, ERCs and their authors"></canvas></div>
+
+<section id="ctl" class="card">
+  <h1>EIP·ERC Citation Graph</h1>
+  <div class="sub">Final EIPs and ERCs with their authors. Node size follows citation PageRank. Each document's score is shared among its authors by author order (n, n−1, …, 1) and summed per author. Hover to see nearby scores. Click a node to open its local graph. <a href="about.html">About ERCRef</a> · data snapshot __DATE__.</div>
+  <form class="row" id="sf">
+    <input type="search" id="q" placeholder="Number or author, e.g. 4337, vbuterin" autocomplete="off">
+    <button type="submit">Find</button>
+  </form>
+  <div class="row">
+    <button id="bGlobal" aria-pressed="true">Global</button>
+    <label for="depth">Depth <input id="depth" type="range" min="1" max="3" value="1" style="width:70px"> <span id="dv">1</span></label>
+    <label for="auth"><input id="auth" type="checkbox" checked> Authors</label>
+  </div>
+  <div id="mode">Global view</div>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--eip)"></i>EIP</span>
+    <span><i class="dot" style="background:var(--erc)"></i>ERC</span>
+    <span><i class="dot" style="background:var(--author)"></i>Author</span>
+  </div>
+</section>
+
+<aside id="info" class="card" hidden></aside>
+
+<script id="data" type="application/json">__DATA__</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(() => {
+const raw = JSON.parse(document.getElementById('data').textContent);
+const N = raw.nodes, byId = new Map(N.map(n => [n.id, n]));
+const adj = new Map(N.map(n => [n.id, new Set()]));
+const linkInfo = new Map(); // "a|b" -> link
+for (const l of raw.links) {
+  if (!byId.has(l.s) || !byId.has(l.t)) continue;
+  adj.get(l.s).add(l.t); adj.get(l.t).add(l.s);
+  linkInfo.set(l.s + '|' + l.t, l); linkInfo.set(l.t + '|' + l.s, l);
+}
+// ranks
+const docs = N.filter(n => n.t !== 'A').sort((a, b) => b.s - a.s);
+const auths = N.filter(n => n.t === 'A').sort((a, b) => b.s - a.s);
+docs.forEach((n, i) => n.rank = i + 1); auths.forEach((n, i) => n.rank = i + 1);
+for (const n of N) {
+  n.label = n.t === 'A' ? (n.h || n.name) : String(n.n);
+  n.R = n.t === 'A' ? Math.min(22, 5 + 4.2 * Math.sqrt(n.s)) : Math.min(34, 8 + 4.2 * Math.sqrt(n.s));
+  if (n.av) { n.img = new Image(); n.img.src = n.av; }
+  n.initials = n.t === 'A' ? (n.name || n.h || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() : '';
+}
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W = 0, H = 0, dpr = 1, T = d3.zoomIdentity;
+function resize() {
+  dpr = window.devicePixelRatio || 1; W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+}
+new ResizeObserver(resize).observe(cv); resize();
+
+let C = {};
+function readTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ['bg','fg','muted','eip','erc','author','link','alink','hi','label']) C[k] = cs.getPropertyValue('--' + k).trim();
+}
+readTheme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
+new MutationObserver(readTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// state
+let mode = 'global', center = null, depth = 1, showAuthors = true;
+let vis = [], links = [], visSet = new Set();
+let hover = null, hoverFade = 0, nbr = new Set();
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const sim = d3.forceSimulation()
+  .force('link', d3.forceLink().id(d => d.id)
+    .distance(l => l.k === 'a' ? 26 + l.source.R + l.target.R : 40 + l.source.R + l.target.R)
+    .strength(l => l.k === 'a' ? 0.5 : 0.15))
+  .force('charge', d3.forceManyBody().strength(d => -40 - 9 * d.R).distanceMax(600))
+  .force('collide', d3.forceCollide(d => d.R + 2))
+  .force('x', d3.forceX(0).strength(0.035))
+  .force('y', d3.forceY(0).strength(0.035))
+  .alphaDecay(0.025).stop();
+
+function build(keepAlpha) {
+  let ids;
+  if (mode === 'global') {
+    ids = new Set(N.filter(n => showAuthors || n.t !== 'A').map(n => n.id));
+  } else {
+    ids = new Set([center.id]); let frontier = [center.id];
+    for (let d = 0; d < depth; d++) {
+      const next = [];
+      for (const id of frontier) for (const m of adj.get(id)) {
+        if (!showAuthors && byId.get(m).t === 'A') continue;
+        if (!ids.has(m)) { ids.add(m); next.push(m); }
+      }
+      frontier = next;
+    }
+  }
+  visSet = ids;
+  vis = [...ids].map(id => byId.get(id));
+  for (const n of vis) if (n.x === undefined || (mode === 'local' && !n._seen)) {
+    const c = center || { x: 0, y: 0 };
+    n.x = (c.x || 0) + (Math.random() - .5) * 80; n.y = (c.y || 0) + (Math.random() - .5) * 80;
+  }
+  links = [];
+  for (const l of raw.links) if (ids.has(l.s) && ids.has(l.t)) links.push({ source: byId.get(l.s), target: byId.get(l.t), k: l.k, w: l.w });
+  sim.nodes(vis); sim.force('link').links(links);
+  if (mode === 'local') { center.fx = center.x; center.fy = center.y; }
+  sim.alpha(keepAlpha ?? 1).restart();
+}
+
+function fit(dur = 600) {
+  if (!vis.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const n of vis) { x0 = Math.min(x0, n.x - n.R); y0 = Math.min(y0, n.y - n.R); x1 = Math.max(x1, n.x + n.R); y1 = Math.max(y1, n.y + n.R); }
+  const pad = 40, k = Math.min(4, 0.95 * Math.min((W - pad * 2) / (x1 - x0 || 1), (H - pad * 2) / (y1 - y0 || 1)));
+  const t = d3.zoomIdentity.translate(W / 2, H / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+  d3.select(cv).transition().duration(reduce ? 0 : dur).call(zoom.transform, t);
+}
+
+// interaction
+const zoom = d3.zoom().scaleExtent([0.08, 8]).on('zoom', e => { T = e.transform; });
+function pick(px, py, slop = 6) {
+  const [x, y] = T.invert([px, py]); let best = null, bd = Infinity;
+  for (const n of vis) {
+    const d = Math.hypot(n.x - x, n.y - y) - n.R;
+    if (d < slop / T.k && d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+let dragMoved = false;
+const drag = d3.drag().container(cv)
+  .subject(e => pick(e.x, e.y, 2))
+  .on('start', e => { dragMoved = false; if (!e.active) sim.alphaTarget(0.25).restart(); e.subject.fx = e.subject.x; e.subject.fy = e.subject.y; })
+  .on('drag', e => { dragMoved = true; const [x, y] = T.invert([e.x, e.y]); e.subject.fx = x; e.subject.fy = y; })
+  .on('end', e => {
+    if (!e.active) sim.alphaTarget(0);
+    if (!(mode === 'local' && e.subject === center)) { e.subject.fx = null; e.subject.fy = null; }
+    if (!dragMoved) focus(e.subject);
+  });
+d3.select(cv).call(drag).call(zoom).on('dblclick.zoom', null);
+
+cv.addEventListener('pointermove', e => {
+  const r = cv.getBoundingClientRect(); const n = pick(e.clientX - r.left, e.clientY - r.top, 10);
+  if (n !== hover) { hover = n; hoverFade = 0; nbr = n ? new Set([...adj.get(n.id)].filter(id => visSet.has(id))) : new Set(); }
+  cv.classList.toggle('over', !!n);
+});
+cv.addEventListener('pointerleave', () => { hover = null; nbr = new Set(); cv.classList.remove('over'); });
+
+// drawing
+function fitText(txt, R, font) {
+  let f = R * 0.82; ctx.font = `600 ${f}px ${font}`;
+  const w = ctx.measureText(txt).width; if (w > R * 1.7) { f *= R * 1.7 / w; ctx.font = `600 ${f}px ${font}`; }
+  return f;
+}
+const MONO = getComputedStyle(document.documentElement).getPropertyValue('--mono');
+const SANS = getComputedStyle(document.documentElement).getPropertyValue('--sans');
+function frame() {
+  if (hover) hoverFade = Math.min(1, hoverFade + (reduce ? 1 : 0.08));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  ctx.translate(T.x, T.y); ctx.scale(T.k, T.k);
+  const H0 = hover, hf = hoverFade;
+  // links
+  ctx.lineWidth = 1 / T.k;
+  for (const l of links) {
+    const on = H0 && (l.source === H0 || l.target === H0);
+    ctx.globalAlpha = H0 ? (on ? 0.95 : 0.06 + 0.3 * (1 - hf)) : (l.k === 'a' ? 0.55 : 0.45);
+    ctx.strokeStyle = on ? C.hi : (l.k === 'a' ? C.alink : C.link);
+    ctx.lineWidth = (on ? 1.6 : 1) / T.k;
+    ctx.beginPath(); ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y); ctx.stroke();
+  }
+  // nodes
+  for (const n of vis) {
+    const lit = !H0 || n === H0 || nbr.has(n.id);
+    ctx.globalAlpha = lit ? 1 : 0.12 + 0.88 * (1 - hf);
+    const R = n.R;
+    if (n.t === 'A') {
+      ctx.save(); ctx.beginPath(); ctx.arc(n.x, n.y, R, 0, Math.PI * 2); ctx.closePath();
+      ctx.fillStyle = C.author; ctx.fill();
+      if (n.img && n.img.complete && n.img.naturalWidth) { ctx.clip(); ctx.drawImage(n.img, n.x - R, n.y - R, R * 2, R * 2); }
+      else if (R * T.k > 7) { ctx.fillStyle = '#fff'; ctx.font = `600 ${R * 0.8}px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(n.initials, n.x, n.y + R * 0.04); }
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(n.x, n.y, R, 0, Math.PI * 2);
+      ctx.strokeStyle = n === H0 || n === center ? C.hi : C.author; ctx.lineWidth = (n === H0 || n === center ? 2.5 : 1.2) / T.k; ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.arc(n.x, n.y, R, 0, Math.PI * 2);
+      ctx.fillStyle = n.t === 'EIP' ? C.eip : C.erc; ctx.fill();
+      if (n === H0 || n === center) { ctx.strokeStyle = C.hi; ctx.lineWidth = 2.5 / T.k; ctx.stroke(); }
+      if (R * T.k > 6) {
+        fitText(n.label, R, MONO); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(n.label, n.x, n.y + R * 0.05);
+      }
+    }
+    // author name under avatar when zoomed in
+    if (n.t === 'A' && lit && (T.k > 1.6 || n === H0 || n === center) && (!H0 || n === H0 || nbr.has(n.id) || T.k > 1.6)) {
+      ctx.globalAlpha = lit ? 0.85 : 0.1; ctx.fillStyle = C.label; ctx.font = `500 ${11 / T.k}px ${SANS}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(n.label, n.x, n.y + R + 3 / T.k);
+    }
+  }
+  // faint score labels above hovered node and its neighbours
+  if (H0 && hf > 0) {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    for (const n of vis) {
+      if (n !== H0 && !nbr.has(n.id)) continue;
+      let txt = n.s.toFixed(2);
+      const l = linkInfo.get(H0.id + '|' + n.id);
+      if (l && l.k === 'a') txt += ` · this doc ${l.w.toFixed(2)}`;
+      ctx.globalAlpha = (n === H0 ? 0.9 : 0.55) * hf;
+      ctx.fillStyle = n === H0 ? C.hi : C.muted;
+      ctx.font = `500 ${(n === H0 ? 12 : 10.5) / T.k}px ${MONO}`;
+      ctx.fillText(txt, n.x, n.y - n.R - 3 / T.k);
+    }
+  }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(frame);
+}
+
+// detail card
+const info = document.getElementById('info');
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+function showInfo(n) {
+  const nb = [...adj.get(n.id)].map(id => byId.get(id));
+  let html;
+  if (n.t === 'A') {
+    const ds = nb.filter(m => m.t !== 'A').map(m => ({ m, w: linkInfo.get(n.id + '|' + m.id).w })).sort((a, b) => b.w - a.w);
+    html = `<h2>${esc(n.name)}</h2>
+      ${n.h ? `<a href="https://github.com/${esc(n.h)}" target="_blank" rel="noopener">@${esc(n.h)}</a>` : '<span class="hint">No GitHub account</span>'}
+      <dl class="kv"><dt>Author score</dt><dd>${n.s.toFixed(2)}</dd><dt>Author rank</dt><dd>${n.rank} / ${auths.length}</dd><dt>Final documents</dt><dd>${ds.length}</dd></dl>
+      <div class="hint">Score from each document</div>
+      <ol>${ds.map(({ m, w }) => `<li><button data-id="${m.id}">${m.t}-${m.n}</button> ${esc(m.title)} <span class="num">${w.toFixed(2)}</span></li>`).join('')}</ol>`;
+  } else {
+    const as = nb.filter(m => m.t === 'A').map(m => ({ m, w: linkInfo.get(n.id + '|' + m.id).w })).sort((a, b) => b.w - a.w);
+    const refs = nb.filter(m => m.t !== 'A').sort((a, b) => b.s - a.s);
+    const base = n.t === 'EIP' ? 'https://eips.ethereum.org/EIPS/eip-' : 'https://ercs.ethereum.org/ERCS/erc-';
+    html = `<h2>${n.t}-${n.n} ${esc(n.title)}</h2>
+      <a href="${base}${n.n}" target="_blank" rel="noopener">Read the document</a>
+      <dl class="kv"><dt>PageRank</dt><dd>${n.s.toFixed(2)}</dd><dt>Document rank</dt><dd>${n.rank} / ${docs.length}</dd><dt>Linked Final documents</dt><dd>${refs.length}</dd></dl>
+      <div class="hint">Authors (share by author order)</div>
+      <ol>${as.map(({ m, w }) => `<li><button data-id="${m.id}">${esc(m.h || m.name)}</button> <span class="num">${w.toFixed(2)}</span></li>`).join('')}</ol>`;
+  }
+  info.innerHTML = html; info.hidden = false;
+}
+info.addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (b) focus(byId.get(b.dataset.id)); });
+
+const modeEl = document.getElementById('mode'), bG = document.getElementById('bGlobal');
+function focus(n) {
+  if (!n) return;
+  mode = 'local'; if (center) { center.fx = null; center.fy = null; }
+  center = n; vis.forEach(m => m._seen = true);
+  build(); showInfo(n);
+  modeEl.innerHTML = `Local graph: <b>${n.t === 'A' ? esc(n.h || n.name) : n.t + '-' + n.n}</b>, depth ${depth}, ${vis.length} nodes`;
+  bG.setAttribute('aria-pressed', 'false');
+  setTimeout(() => fit(), reduce ? 0 : 500);
+}
+function global() {
+  mode = 'global'; if (center) { center.fx = null; center.fy = null; } center = null;
+  build(0.5); info.hidden = true; modeEl.textContent = `Global view, ${vis.length} nodes`;
+  bG.setAttribute('aria-pressed', 'true'); setTimeout(() => fit(), reduce ? 0 : 400);
+}
+bG.onclick = global;
+const dEl = document.getElementById('depth');
+dEl.oninput = () => { depth = +dEl.value; document.getElementById('dv').textContent = depth; if (mode === 'local') focus(center); };
+document.getElementById('auth').onchange = e => { showAuthors = e.target.checked; mode === 'local' ? focus(center) : global(); };
+document.getElementById('sf').onsubmit = e => {
+  e.preventDefault(); const q = document.getElementById('q').value.trim().toLowerCase().replace(/^(erc|eip)[- ]?/, '');
+  if (!q) return;
+  const hit = N.find(n => n.t !== 'A' && String(n.n) === q) || N.find(n => n.t === 'A' && (n.h === q || (n.name || '').toLowerCase() === q))
+    || N.find(n => n.t === 'A' && ((n.h || '').includes(q) || (n.name || '').toLowerCase().includes(q))) || N.find(n => n.t !== 'A' && n.title.toLowerCase().includes(q));
+  if (hit) focus(hit); else modeEl.textContent = `No match for "${q}". The graph shows Final documents only. Try a number or a GitHub handle.`;
+};
+
+// boot: settle the global layout first so the first frame is already readable
+build(1); sim.stop(); for (let i = 0; i < 260; i++) sim.tick();
+modeEl.textContent = `Global view, ${vis.length} nodes`;
+const boot = () => { fit(0); sim.alpha(0.05).restart(); requestAnimationFrame(frame); };
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(boot);
+})();
+</script>
+
+</body>
+</html>
